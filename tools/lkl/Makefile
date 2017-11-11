@@ -197,6 +197,7 @@ install: headers_install libraries_install programs_install
 
 
 FORCE: ;
+.PHONY: static shared hijack
 .PHONY: all clean $(TEST_TARGETS) FORCE
 .PHONY: headers_install libraries_install programs_install install
 .NOTPARALLEL : lib/lkl.o
