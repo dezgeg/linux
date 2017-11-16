@@ -19,7 +19,7 @@ extern "C" {
 #define strtok_r strtok_s
 #endif
 
-#if __LKL__BITS_PER_LONG == 64
+#if defined(SWIG) || __LKL__BITS_PER_LONG == 64
 #define lkl_sys_stat lkl_sys_newstat
 #define lkl_sys_lstat lkl_sys_newlstat
 #define lkl_sys_fstatat lkl_sys_newfstatat
@@ -385,6 +385,7 @@ int lkl_netdev_get_ifindex(int id);
  */
 struct lkl_netdev *lkl_netdev_tap_create(const char *ifname, int offload);
 
+#ifdef CONFIG_AUTO_LKL_VIRTIO_NET_DPDK
 /**
  * lkl_netdev_dpdk_create - create DPDK net_device for the virtio net backend
  *
@@ -392,7 +393,9 @@ struct lkl_netdev *lkl_netdev_tap_create(const char *ifname, int offload);
  * only used for an internal use.
  */
 struct lkl_netdev *lkl_netdev_dpdk_create(const char *ifname);
+#endif
 
+#ifdef CONFIG_AUTO_LKL_VIRTIO_NET_VDE
 /**
  * lkl_netdev_vde_create - create VDE net_device for the virtio net backend
  *
@@ -400,6 +403,7 @@ struct lkl_netdev *lkl_netdev_dpdk_create(const char *ifname);
  * in advance.
  */
 struct lkl_netdev *lkl_netdev_vde_create(const char *switch_path);
+#endif
 
 /**
  * lkl_netdev_raw_create - create raw socket net_device for the virtio net
