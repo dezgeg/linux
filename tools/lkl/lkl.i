@@ -15,6 +15,10 @@
 %ignore lkl_mount_dev;
 %ignore lkl_sys_read;
 %ignore lkl_sys_write;
+%ignore lkl_opendir;
+
+%nodefaultctor lkl_dir;
+%nodefaultdtor lkl_dir;
 
 /* Make the SWIG parser not choke on some files */
 #define __attribute__(...)
@@ -71,3 +75,11 @@ long do_lkl_sys_write(unsigned int fd, const char *buf, lkl_size_t count)
 }
 %}
 %clear const char *buf, lkl_size_t count;
+
+%rename do_lkl_opendir lkl_opendir;
+%inline %{
+struct lkl_dir *do_lkl_opendir(const char *path, int *OUTPUT)
+{
+    return lkl_opendir(path, OUTPUT);
+}
+%}

@@ -1,5 +1,6 @@
 import argparse
 import fnmatch
+import io
 import lkl
 import os
 import stat
@@ -7,6 +8,95 @@ import sys
 
 cptofs = False
 cla = None
+
+def ensure_bytes(s):
+    if not isinstance(s, bytes):
+        return os.fsencode(s)
+    return s
+
+def wrap_in_oserror(func, *args, **kwargs):
+    ret = func(*args, **kwargs)
+    if isinstance(ret, int):
+        errorcode = ret
+    elif isinstance(ret, tuple):
+        errorcode = ret[0]
+        ret = ret[1] if len(ret) == 2 else ret[1:]
+    else:
+        errorcode = 0
+
+    if errorcode < 0:
+        raise OSError(errorcode, lkl.lkl_strerror(errorcode))
+    return ret
+
+class LklFile(io.IOBase):
+    def __init__(self, fd):
+        self.fd = fd
+
+    def close(self):
+        if self.fd >= 0:
+            lkl.lkl_sys_close(self.fd)
+        self.fd = -1
+        super().close()
+
+    def seek(self, offset, whence):
+        return wrap_in_oserror(lkl.lkl_sys_lseek, self.fd, offset, whence)
+
+    def seekable(self):
+        return True
+
+    def readable(self):
+        # XXX check open flags?
+        return True
+
+    def read(self, size=-1):
+        if size >= 0:
+            return wrap_in_oserror(lkl.lkl_sys_read, self.fd, size)
+
+        ret = 0
+        buf = bytes()
+        while True:
+            ret, newbuf = lkl.lkl_sys_read(self.fd, 65536)
+            if ret <= 0:
+                break
+            buf += newbuf
+
+        if len(buf) == 0 and ret:
+            raise OSError(ret, lkl.lkl_strerror(ret))
+        return buf
+
+    def write(self, buf):
+        return wrap_in_oserror(lkl.lkl_sys_write, self.fd, buf)
+
+    def writable(self):
+        # XXX check open flags?
+        return True
+
+class LocalFs(object):
+    def open(path, flags):
+        return os.open(path, flags, 0)
+
+class LklFs(object):
+    def __init__(self, mountpoint):
+        self.mountpoint = os.path.normpath(ensure_bytes(mountpoint))
+
+    def open(self, path, flags):
+        abspath = os.path.join(self.mountpoint, ensure_bytes(path))
+        fd = wrap_in_oserror(lkl.lkl_sys_open, abspath, flags, 0)
+        return LklFile(fd)
+
+    def listdir(self, path):
+        abspath = os.path.join(self.mountpoint, ensure_bytes(path))
+
+        dir, ret = lkl.lkl_opendir(abspath)
+        if not dir:
+            raise OSError(ret, lkl.lkl_strerror(ret))
+
+        while True:
+            de = lkl.lkl_readdir(dir)
+            print(de)
+            print(de.d_name)
+            if not de:
+                break
 
 def concat_path(p1, p2):
     if not isinstance(p1, bytes):
@@ -18,12 +108,9 @@ def concat_path(p1, p2):
 
 def open_src(path):
     if cptofs:
-        fd = os.open(path, os.O_RDONLY, 0)
+        fd = 666
     else:
-        fd = lkl.lkl_sys_open(path, lkl.LKL_O_RDONLY, 0)
-
-    if fd < 0:
-        print("unable to open file %s for reading: %s" % (path, strerror(errno) if cptofs else lkl.lkl_strerror(fd)))
+        fd = 42
 
     return fd
 
@@ -382,10 +469,16 @@ def main():
     if ret:
         fprintf(stderr, "can't mount disk: %s\n", lkl_strerror(ret))
     else:
-        for path in cla.src_paths:
-            ret = copy_one(path, mpoint, cla.dst_path)
-            if ret:
-                break
+        fs = LklFs(mpoint)
+        print(fs)
+        f = fs.open(b'lkl.py', os.O_RDONLY)
+        print(f)
+        print(f.read(8))
+        fs.listdir('/')
+        #for path in cla.src_paths:
+        #    ret = copy_one(path, mpoint, cla.dst_path)
+        #    if ret:
+        #        break
 
     ret = lkl.lkl_umount_dev(disk_id, cla.partition, 0, 1000)
 
