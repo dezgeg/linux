@@ -18,6 +18,8 @@
 %ignore lkl_mount_dev;
 %ignore lkl_sys_read;
 %ignore lkl_sys_write;
+%ignore lkl_sys_stat;
+%ignore lkl_sys_newstat;
 %ignore lkl_opendir;
 %ignore lkl_readdir;
 
@@ -44,6 +46,8 @@
 %include <lkl/asm-generic/fcntl.h>
 /* LKL_EEXIST etc. */
 %include <lkl/asm-generic/errno-base.h>
+/* struct lkl_stat etc. */
+%include <lkl/asm-generic/stat.h>
 %include "hack.h"
 
 /* Now apply the overrides. */
@@ -90,10 +94,10 @@ long do_lkl_sys_write(unsigned int fd, const char *buf, lkl_size_t count)
     $1 = &temp;
 }
 %typemap(argout) struct lkl_stat **res {
-    %append_output(SWIG_NewPointerObj((void*)($1), $1_descriptor, SWIG_POINTER_OWN));
+    %append_output(SWIG_NewPointerObj((void*)*($1), $*1_descriptor, SWIG_POINTER_OWN));
 }
 
-%rename do_lkl_sys_stat lkl_sys_stat;
+%rename do_lkl_sys_stat lkl_sys_newstat;
 %inline %{
 int do_lkl_sys_stat(const char *filename, struct lkl_stat **res)
 {

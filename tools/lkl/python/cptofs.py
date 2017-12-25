@@ -93,13 +93,17 @@ class LklFs(object):
         if not dir:
             raise OSError(ret, lkl.lkl_strerror(ret))
 
-
         while True:
             ret, de = lkl.lkl_readdir(dir)
             print(('readdir ret', ret, de))
-            print(('d_name', de.d_name))
             if not de:
                 break
+            print(('d_name', de.d_name))
+
+    def stat(self, path):
+        ret, stbuf = lkl.lkl_sys_newstat(path)
+        print(('stat', ret, stbuf))
+        print(('st_*', stbuf.st_dev, stbuf.st_ino, stbuf.st_mode))
 
 def concat_path(p1, p2):
     if not isinstance(p1, bytes):
@@ -478,6 +482,7 @@ def main():
         print(f)
         print(f.read(8))
         fs.listdir('/')
+        fs.stat(b'/')
         #for path in cla.src_paths:
         #    ret = copy_one(path, mpoint, cla.dst_path)
         #    if ret:
