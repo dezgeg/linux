@@ -19,8 +19,8 @@ def wrap_in_oserror(func, *args, **kwargs):
     if isinstance(ret, int):
         errorcode = ret
     elif isinstance(ret, tuple):
-        errorcode = ret[-1]
-        ret = ret[0] if len(ret) == 2 else ret[:-1]
+        errorcode = ret[0]
+        ret = ret[1] if len(ret) == 2 else ret[1:]
     else:
         errorcode = 0
 
@@ -87,14 +87,17 @@ class LklFs(object):
     def listdir(self, path):
         abspath = os.path.join(self.mountpoint, ensure_bytes(path))
 
-        dir, ret = lkl.lkl_opendir(abspath)
+        print(('opendir', abspath))
+        ret, dir = lkl.lkl_opendir(abspath)
+        print(('opendir ret', ret, dir))
         if not dir:
             raise OSError(ret, lkl.lkl_strerror(ret))
 
+
         while True:
-            de, ret = lkl.lkl_readdir(dir)
-            print(de)
-            print(de.d_name)
+            ret, de = lkl.lkl_readdir(dir)
+            print(('readdir ret', ret, de))
+            print(('d_name', de.d_name))
             if not de:
                 break
 
@@ -463,7 +466,7 @@ def main():
 
     lkl.lkl_start_kernel(lkl.cvar.lkl_host_ops, b"mem=100M")
 
-    mpoint, ret = lkl.lkl_mount_dev(disk_id, cla.partition, cla.filesystem_type.encode('utf-8'),
+    ret, mpoint = lkl.lkl_mount_dev(disk_id, cla.partition, cla.filesystem_type.encode('utf-8'),
                 0 if cptofs else lkl.LKL_MS_RDONLY,
                 None)
     if ret:

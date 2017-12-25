@@ -52,11 +52,11 @@
 %rename do_lkl_mount_dev lkl_mount_dev;
 %cstring_bounded_output(char *mnt_str, PATH_MAX)
 %inline %{
-void do_lkl_mount_dev(unsigned int disk_id, unsigned int part, const char *fs_type,
+long do_lkl_mount_dev(unsigned int disk_id, unsigned int part, const char *fs_type,
                       int flags, const char *opts,
-                      char *mnt_str, int* OUTPUT)
+                      char *mnt_str)
 {
-    *OUTPUT = lkl_mount_dev(disk_id, part, fs_type, flags, opts, mnt_str, PATH_MAX);
+    return lkl_mount_dev(disk_id, part, fs_type, flags, opts, mnt_str, PATH_MAX);
 }
 %}
 %clear char *mnt_str;
@@ -64,14 +64,14 @@ void do_lkl_mount_dev(unsigned int disk_id, unsigned int part, const char *fs_ty
 %rename do_lkl_sys_read lkl_sys_read;
 %cstring_output_withsize(char *buf, lkl_size_t *count)
 %inline %{
-void do_lkl_sys_read(unsigned int fd, char *buf, lkl_size_t *count, int *OUTPUT)
+long do_lkl_sys_read(unsigned int fd, char *buf, lkl_size_t *count)
 {
     long ret = lkl_sys_read(fd, buf, *count);
     if (ret < 0)
         *count = 0;
     else
         *count = ret;
-    *OUTPUT = ret;
+    return ret;
 }
 %}
 %clear char *buf, lkl_size_t *count;
@@ -79,43 +79,72 @@ void do_lkl_sys_read(unsigned int fd, char *buf, lkl_size_t *count, int *OUTPUT)
 %rename do_lkl_sys_write lkl_sys_write;
 %apply (char *STRING, size_t LENGTH) { (const char *buf, lkl_size_t count) };
 %inline %{
-void do_lkl_sys_write(unsigned int fd, const char *buf, lkl_size_t count, int* OUTPUT)
+long do_lkl_sys_write(unsigned int fd, const char *buf, lkl_size_t count)
 {
-    *OUTPUT = lkl_sys_write(fd, buf, count);
+    return lkl_sys_write(fd, buf, count);
 }
 %}
 %clear const char *buf, lkl_size_t count;
 
+%typemap(in, numinputs=0) struct lkl_stat **res (struct lkl_stat* temp) {
+    $1 = &temp;
+}
+%typemap(argout) struct lkl_stat **res {
+    %append_output(SWIG_NewPointerObj((void*)($1), $1_descriptor, SWIG_POINTER_OWN));
+}
+
 %rename do_lkl_sys_stat lkl_sys_stat;
 %inline %{
-struct lkl_stat *do_lkl_sys_stat(const char *filename, int* OUTPUT)
+int do_lkl_sys_stat(const char *filename, struct lkl_stat **res)
 {
     struct lkl_stat *statbuf = malloc(sizeof(*statbuf));
+    int ret;
     if (!statbuf) {
-        *OUTPUT = -ENOMEM;
-        return NULL;
+        *res = NULL;
+        return -ENOMEM;
     }
-    *OUTPUT = lkl_sys_stat(filename, statbuf);
-    if (*OUTPUT) {
+    ret = lkl_sys_stat(filename, statbuf);
+    if (ret) {
         free(statbuf);
-        return NULL;
+        return ret;
     }
-    return statbuf;
+    *res = statbuf;
+    return 0;
 }
 %}
+%clear struct lkl_stat **res;
+
+%typemap(in, numinputs=0) struct lkl_dir **res (struct lkl_dir* temp) {
+    $1 = &temp;
+}
+%typemap(argout) struct lkl_dir **res {
+    %append_output(SWIG_NewPointerObj((void*)*($1), $*1_descriptor, SWIG_POINTER_OWN));
+}
 
 %rename do_lkl_opendir lkl_opendir;
 %inline %{
-struct lkl_dir *do_lkl_opendir(const char *path, int *OUTPUT)
+int do_lkl_opendir(const char *path, struct lkl_dir **res)
 {
-    return lkl_opendir(path, OUTPUT);
+    int ret = 0;
+    struct lkl_dir* dir = lkl_opendir(path, &ret);
+    *res = dir;
+
+    return ret;
 }
 %}
+%clear struct lkl_dir **res;
 
 /*
  * struct lkl_linux_dirent64 has: char d_name[0]; so of course swig thinks
  * that's always a zero-length string... So do more wrapping.
  */
+%typemap(in, numinputs=0) struct wrapped_lkl_dirent **res (struct wrapped_lkl_dirent* temp) {
+    $1 = &temp;
+}
+%typemap(argout) struct wrapped_lkl_dirent **res {
+    %append_output(SWIG_NewPointerObj((void*)*($1), $*1_descriptor, SWIG_POINTER_OWN));
+}
+
 %rename wrapped_lkl_dirent lkl_dirent;
 %inline %{
 struct wrapped_lkl_dirent {
@@ -129,31 +158,32 @@ struct wrapped_lkl_dirent {
 
 %rename do_lkl_readdir lkl_readdir;
 %inline %{
-struct wrapped_lkl_dirent *do_lkl_readdir(struct lkl_dir *dir, int *OUTPUT)
+int do_lkl_readdir(struct lkl_dir *dir, struct wrapped_lkl_dirent **res)
 {
     struct lkl_linux_dirent64 *de;
     struct wrapped_lkl_dirent *wrapped_de = malloc(sizeof(*wrapped_de));
 
     if (!wrapped_de) {
-        *OUTPUT = -ENOMEM;
-        return NULL;
+        free(wrapped_de);
+        *res = NULL;
+        return -ENOMEM;
     }
 
     de = lkl_readdir(dir);
-
     if (!de) {
-        *OUTPUT = lkl_errdir(dir);
         free(wrapped_de);
-        return NULL;
+        *res = NULL;
+        return lkl_errdir(dir);
     }
 
-    *OUTPUT = 0;
     wrapped_de->d_ino = de->d_ino;
     wrapped_de->d_off = de->d_off;
     wrapped_de->d_reclen = de->d_reclen;
     wrapped_de->d_type = de->d_type;
     wrapped_de->d_name = strdup(de->d_name);
 
-    return wrapped_de;
+    *res = wrapped_de;
+    return 0;
 }
 %}
+%clear struct wrapped_lkl_dirent **res;
