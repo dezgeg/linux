@@ -44,8 +44,10 @@
 %include <lkl/linux/fs.h>
 /* LKL_O_RDWR etc. */
 %include <lkl/asm-generic/fcntl.h>
-/* LKL_EEXIST etc. */
+/* POSIX errnos. */
 %include <lkl/asm-generic/errno-base.h>
+/* Linux-specific errnos. */
+%include <lkl/asm-generic/errno.h>
 /* struct lkl_stat etc. */
 %include <lkl/asm-generic/stat.h>
 %include "hack.h"

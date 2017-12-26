@@ -87,23 +87,37 @@ class LklFs(object):
     def listdir(self, path):
         abspath = os.path.join(self.mountpoint, ensure_bytes(path))
 
-        print(('opendir', abspath))
-        ret, dir = lkl.lkl_opendir(abspath)
-        print(('opendir ret', ret, dir))
-        if not dir:
-            raise OSError(ret, lkl.lkl_strerror(ret))
-
+        dir = wrap_in_oserror(lkl.lkl_opendir, abspath)
+        ret = []
         while True:
-            ret, de = lkl.lkl_readdir(dir)
-            print(('readdir ret', ret, de))
+            de = wrap_in_oserror(lkl.lkl_readdir, dir)
             if not de:
                 break
-            print(('d_name', de.d_name))
+            ret.append(de.d_name)
+        return ret
 
     def stat(self, path):
-        ret, stbuf = lkl.lkl_sys_newstat(path)
-        print(('stat', ret, stbuf))
-        print(('st_*', stbuf.st_dev, stbuf.st_ino, stbuf.st_mode))
+        abspath = os.path.join(self.mountpoint, ensure_bytes(path))
+
+        stbuf = wrap_in_oserror(lkl.lkl_sys_newstat, abspath)
+        # Yes, the only way of creating a stat_result is passing in a 19-tuple.
+        return os.stat_result((
+            stbuf.st_mode,
+            stbuf.st_ino,
+            stbuf.st_dev,
+            stbuf.st_nlink,
+            stbuf.st_uid,
+            stbuf.st_gid,
+            stbuf.st_size,
+            stbuf.lkl_st_atime,
+            stbuf.lkl_st_mtime,
+            stbuf.lkl_st_ctime,
+            stbuf.st_atime_nsec,
+            stbuf.st_mtime_nsec,
+            stbuf.st_ctime_nsec,
+            stbuf.st_blksize,
+            stbuf.st_blocks,
+            stbuf.st_rdev))
 
 def concat_path(p1, p2):
     if not isinstance(p1, bytes):
@@ -481,8 +495,8 @@ def main():
         f = fs.open(b'lkl.py', os.O_RDONLY)
         print(f)
         print(f.read(8))
-        fs.listdir('/')
-        fs.stat(b'/')
+        print(fs.listdir('/'))
+        print(fs.stat(b'/'))
         #for path in cla.src_paths:
         #    ret = copy_one(path, mpoint, cla.dst_path)
         #    if ret:
