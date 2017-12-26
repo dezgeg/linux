@@ -100,7 +100,12 @@ class LklFs(object):
         abspath = os.path.join(self.mountpoint, ensure_bytes(path))
 
         stbuf = wrap_in_oserror(lkl.lkl_sys_newstat, abspath)
-        # Yes, the only way of creating a stat_result is passing in a 19-tuple.
+        atime_ns = stbuf.lkl_st_atime * 1000000000 + stbuf.st_atime_nsec
+        mtime_ns = stbuf.lkl_st_mtime * 1000000000 + stbuf.st_mtime_nsec
+        ctime_ns = stbuf.lkl_st_ctime * 1000000000 + stbuf.st_ctime_nsec
+
+        # Yes, really. The only way of creating a stat_result is passing in a
+        # 19-tuple. With 3 different representations of each timestamp.
         return os.stat_result((
             stbuf.st_mode,
             stbuf.st_ino,
@@ -112,9 +117,12 @@ class LklFs(object):
             stbuf.lkl_st_atime,
             stbuf.lkl_st_mtime,
             stbuf.lkl_st_ctime,
-            stbuf.st_atime_nsec,
-            stbuf.st_mtime_nsec,
-            stbuf.st_ctime_nsec,
+            atime_ns / 1e9,
+            mtime_ns / 1e9,
+            ctime_ns / 1e9,
+            atime_ns,
+            mtime_ns,
+            ctime_ns,
             stbuf.st_blksize,
             stbuf.st_blocks,
             stbuf.st_rdev))
